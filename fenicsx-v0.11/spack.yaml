@@ -1,0 +1,113 @@
+# Spack environment: FEniCSx 0.11 on the Simula eX3 cluster (defq, AMD EPYC nodes)
+#
+# Differences from fenicsx-defq (0.10):
+#  * OpenMPI is built with UCX (InfiniBand) and Slurm support. The old env used
+#    openmpi fabrics=none schedulers=none, i.e. TCP only between nodes and no
+#    Slurm integration.
+#  * UCX is built against the system rdma-core (Mellanox OFED) and Slurm is
+#    taken from the system, so MPI talks to the real interconnect/scheduler.
+#    (The system OpenMPI modules can't be used directly: the UCX-enabled one,
+#    openmpi/ofed5.8/gcc/64/4.1.4, has a broken pml_ucx plugin on the compute
+#    nodes -- missing libbfd-2.30-system.so.)
+#  * dolfinx/basix/ffcx/ufl 0.11 and latest versions of the other packages.
+spack:
+  specs:
+  - py-fenics-dolfinx@0.11 +petsc4py %gcc@13
+  - fenics-dolfinx@0.11 +adios2 +petsc +superlu-dist partitioners=parmetis
+  - py-fenics-ffcx@0.11
+  - petsc@3.24 +mumps +hypre +superlu-dist ~fortran-bindings
+  - adios2 +hdf5 +mpi +python
+  - openmpi
+  - py-mpi4py
+  - py-numba
+  - py-pyvista
+  - py-h5py +mpi
+  - py-scipy
+  - py-scifem
+  - py-cardiac-geometriesx
+  - py-fenicsx-beat
+  - py-fenicsx-pulse
+  - py-fenicsx-ldrb
+  - py-gotranx
+  - py-crossbridge +fast
+  - py-dolfinx-adjoint +scifem
+  - py-pip
+
+  view: true
+  concretizer:
+    unify: true
+    # Reuse what is already installed, except the scientificcomputing packages,
+    # which always get their newest version on (re)concretization.
+    reuse:
+      roots: true
+      exclude:
+      - py-scifem
+      - py-fenicsx-pulse
+      - py-fenicsx-beat
+      - py-fenicsx-ldrb
+      - py-cardiac-geometriesx
+      - py-cardiac-geometries-core
+      - py-gotranx
+      - py-io4dolfinx
+      - py-circulation
+      - py-ukb-atlas
+      - py-crossbridge
+      - py-dolfinx-adjoint
+      - py-pyadjoint
+      - py-checkpoint-schedules
+
+  repos:
+    # local overlay (newer py-nanobind); build script copies repo/ into the env dir
+    overlay: $env/repo/spack_repo/fenicsx_v011_overlay
+    scientificcomputing:
+      git: https://github.com/scientificcomputing/spack_repos.git
+    fenics:
+      git: https://github.com/FEniCS/spack-fenics.git
+
+  packages:
+    all:
+      # x86_64_v3 (AVX2) runs on both the defq nodes (EPYC 7601, zen) and the
+      # login node (Xeon Gold 6130, skylake).
+      require: target=x86_64_v3
+      providers:
+        mpi: [openmpi]
+
+    # ---- compiler (same GCC 13.4 as fenicsx-defq) ---------------------------
+    gcc:
+      externals:
+      - spec: gcc@13.4.0 languages:='c,c++,fortran'
+        prefix: /cm/shared/spack-modules/apps/linux-x86_64_v3/gcc-13.4.0-nxdrxe5kabjyug6tyclyxuwpgxjxlqhd
+        extra_attributes:
+          compilers:
+            c: /cm/shared/spack-modules/apps/linux-x86_64_v3/gcc-13.4.0-nxdrxe5kabjyug6tyclyxuwpgxjxlqhd/bin/gcc
+            cxx: /cm/shared/spack-modules/apps/linux-x86_64_v3/gcc-13.4.0-nxdrxe5kabjyug6tyclyxuwpgxjxlqhd/bin/g++
+            fortran: /cm/shared/spack-modules/apps/linux-x86_64_v3/gcc-13.4.0-nxdrxe5kabjyug6tyclyxuwpgxjxlqhd/bin/gfortran
+
+    # ---- MPI stack -----------------------------------------------------------
+    mpi:
+      require: openmpi
+    openmpi:
+      require:
+      - '@5.0.8 fabrics=ucx,cma schedulers=slurm'
+    ucx:
+      require:
+      - '+verbs +rdmacm +mlx5_dv +rc +ud +dc +dm +cma +thread_multiple ~cuda ~rocm'
+    # Mellanox OFED rdma-core (libibverbs/librdmacm) from the OS -- must match
+    # the kernel drivers, so never build it.
+    rdma-core:
+      buildable: false
+      externals:
+      - spec: rdma-core@54.0
+        prefix: /usr
+    # Cluster Slurm 21.08.8
+    slurm:
+      buildable: false
+      externals:
+      - spec: slurm@21-08-8-2 sysconfdir=/cm/shared/apps/slurm/var/etc/slurm
+        prefix: /cm/shared/apps/slurm/21.08.8
+
+    # ---- numerics ------------------------------------------------------------
+    hypre:
+      require: '@2.32:'
+    python:
+      require: '@3.13'
