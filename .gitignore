@@ -1,0 +1,10 @@
+# Slurm job logs (build-env.sh, tests/test-2node.sh)
+*.log
+# NFS silly-rename files
+.nfs*
+# compiled by tests/test-2node.sh
+tests/pingpong
+*/tests/pingpong
+# Python bytecode
+__pycache__/
+*.pyc
