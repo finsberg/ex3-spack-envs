@@ -1,0 +1,102 @@
+# Spack environment: FEniCSx main (development branches) on the Simula eX3 cluster
+# (defq, AMD EPYC nodes), set up 24.10.2026.
+#
+# Same compiler, MPI stack (OpenMPI + UCX/InfiniBand + Slurm), PETSc and externals
+# as fenicsx-v0.11, but:
+#  * dolfinx/basix/ffcx/ufl from their git main branches,
+#  * scifem and io4dolfinx from their git main branches,
+#  * without cardiac-geometriesx, fenicsx-beat/pulse/ldrb, crossbridge, gotranx and
+#    dolfinx-adjoint.
+spack:
+  specs:
+  - py-fenics-dolfinx@main +petsc4py %gcc@13
+  - fenics-dolfinx@main +adios2 +petsc +superlu-dist partitioners=parmetis
+  - fenics-basix@main
+  - py-fenics-basix@main
+  - py-fenics-ffcx@main
+  - py-fenics-ufl@main
+  - petsc@3.24 +mumps +hypre +superlu-dist ~fortran-bindings
+  - adios2 +hdf5 +mpi +python
+  - openmpi
+  - py-mpi4py
+  - py-numba
+  - py-pyvista
+  - py-h5py +mpi
+  - py-scipy
+  - py-scifem@main
+  - py-io4dolfinx@main
+  - py-pip
+
+  view: true
+  concretizer:
+    unify: true
+    # Reuse what is already installed, except the packages built from git main
+    # branches, which get the current head of main on (re)concretization.
+    reuse:
+      roots: true
+      exclude:
+      - fenics-dolfinx
+      - py-fenics-dolfinx
+      - fenics-basix
+      - py-fenics-basix
+      - py-fenics-ffcx
+      - py-fenics-ufl
+      - py-scifem
+      - py-io4dolfinx
+      - py-fenicsx-compat
+
+  repos:
+    # local overlay (newer py-nanobind); build script copies repo/ into the env dir
+    overlay: $env/repo/spack_repo/fenicsx_main_overlay
+    scientificcomputing:
+      git: https://github.com/scientificcomputing/spack_repos.git
+    fenics:
+      git: https://github.com/FEniCS/spack-fenics.git
+
+  packages:
+    all:
+      # x86_64_v3 (AVX2) runs on both the defq nodes (EPYC 7601, zen) and the
+      # login node (Xeon Gold 6130, skylake).
+      require: target=x86_64_v3
+      providers:
+        mpi: [openmpi]
+
+    # ---- compiler (same GCC 13.4 as fenicsx-defq) ---------------------------
+    gcc:
+      externals:
+      - spec: gcc@13.4.0 languages:='c,c++,fortran'
+        prefix: /cm/shared/spack-modules/apps/linux-x86_64_v3/gcc-13.4.0-nxdrxe5kabjyug6tyclyxuwpgxjxlqhd
+        extra_attributes:
+          compilers:
+            c: /cm/shared/spack-modules/apps/linux-x86_64_v3/gcc-13.4.0-nxdrxe5kabjyug6tyclyxuwpgxjxlqhd/bin/gcc
+            cxx: /cm/shared/spack-modules/apps/linux-x86_64_v3/gcc-13.4.0-nxdrxe5kabjyug6tyclyxuwpgxjxlqhd/bin/g++
+            fortran: /cm/shared/spack-modules/apps/linux-x86_64_v3/gcc-13.4.0-nxdrxe5kabjyug6tyclyxuwpgxjxlqhd/bin/gfortran
+
+    # ---- MPI stack -----------------------------------------------------------
+    mpi:
+      require: openmpi
+    openmpi:
+      require:
+      - '@5.0.8 fabrics=ucx,cma schedulers=slurm'
+    ucx:
+      require:
+      - '+verbs +rdmacm +mlx5_dv +rc +ud +dc +dm +cma +thread_multiple ~cuda ~rocm'
+    # Mellanox OFED rdma-core (libibverbs/librdmacm) from the OS -- must match
+    # the kernel drivers, so never build it.
+    rdma-core:
+      buildable: false
+      externals:
+      - spec: rdma-core@54.0
+        prefix: /usr
+    # Cluster Slurm 21.08.8
+    slurm:
+      buildable: false
+      externals:
+      - spec: slurm@21-08-8-2 sysconfdir=/cm/shared/apps/slurm/var/etc/slurm
+        prefix: /cm/shared/apps/slurm/21.08.8
+
+    # ---- numerics ------------------------------------------------------------
+    hypre:
+      require: '@2.32:'
+    python:
+      require: '@3.13'
